@@ -1,0 +1,273 @@
+
+<!-- Url add on with machine ID will be passed in from Heat Map.
+    Then this page will query database to fetch info associated 
+    with this machine. 
+    Graphs will be built from the resulting json payload. 
+    Also, RGraph folder has been moved to MAMP/htdocs.
+    Though it should probably go in MAMP/Library.
+    -->
+
+<head>
+    <title>Performance Graphs</title>
+    <script src="http://localhost:8888/RGraph/libraries/RGraph.svg.common.core.js"></script>
+    <script src="http://localhost:8888/RGraph/libraries/RGraph.svg.line.js"></script>
+    <style>
+        .dropbtn {
+            background-color: #4CAF50;
+            color: white;
+            padding: 16px;
+            font-size: 16px;
+            border: none;
+            cursor: pointer;
+        }
+        .dropbtn:hover, .dropbtn:focus {
+            background-color: #3e8e41;
+        }
+
+        .dropdown {
+            float: right;
+            position: absolute;
+            display: inline-block;
+            top:0;
+            right:0;
+        }
+
+        .dropdown-content {
+            display: none;
+            position: absolute;
+            background-color: #f9f9f9;
+            min-width: 160px;
+            overflow: auto;
+            box-shadow: 0px 8px 16px 0px rgba(0,0,0,0.2);
+            right: 0;
+            z-index: 1;
+        }
+
+        .dropdown-content a {
+            color: black;
+            padding: 12px 16px;
+            text-decoration: none;
+            display: block;
+        }
+
+        .dropdown a:hover {background-color: #f1f1f1}
+
+        .show {display:block;}
+    </style>
+</head>
+
+<body>
+    <h1 id="header">Performance Graphs for Compute Node (???)</h1>
+    <div id="fan-graph" style="width: 600px; height: 250px; display: inline-block"></div>
+    <div id="temp-graph" style="width: 600px; height: 250px; display: inline-block"></div>
+    <div id="power-graph" style="width: 600px; height: 250px; display: inline-block"></div>
+    <div id="task-graph" style="width: 600px; height: 250px; display: inline-block"></div>
+
+    <div class="dropdown">
+    <button onclick="menu()" class="dropbtn">Time period</button>
+    <div id="myDropdown" class="dropdown-content">
+        <a href="#week">1 Week</a>
+        <a href="#month">1 Month</a>
+        <a href="#six_months">6 Months</a>
+        <a href="#year">1 Year</a>
+    </div>
+    </div>
+    <script>
+
+    // Every time the RackHD query goes out, the daily average value stored in the db
+    // should be updated accoring to this following segment.
+
+    var count = 5; //arbitrary number, it's the number of times RackHD query has been called today
+    var average = 100; // also arbitrary. It's the average for a certain metric on a machine (temp, speed, etc.)
+    var newMetric = 85; // metric returned by RackHD poll
+
+    average = (average + newMetric) / count; // Is this true?
+
+    count++;
+
+    var machineIDOne = window.location.href.split('=')[1];
+    var machineID = '';
+    var counter = 0
+    while (counter <= 10){
+        machineID += machineIDOne[counter];
+        counter++;
+        if (machineIDOne[counter] == "#")
+            break;
+    }
+
+    document.getElementById("header").innerHTML = "Performance Graphs for "+machineID;
+
+    var dayList = ["monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday"];
+    // Example payload of a week's worth of data for one machine
+    var payload = {
+            "monday":{
+                "temp": 50,
+                "speed": 4598,
+                "power": 4.07,
+                "use": 0.07,
+            },
+            "tuesday":{
+                "temp": 56,
+                "speed": 5371,
+                "power": 6.08,
+                "use": 0.11,
+            },
+            "wednesday":{
+                "temp": 72,
+                "speed": 6008,
+                "power": 4.11,
+                "use": 0.3,
+            },
+            "thursday":{
+                "temp": 64,
+                "speed": 4609,
+                "power": 8.73,
+                "use": 0.46,
+            },
+            "friday":{
+                "temp": 80,
+                "speed": 4590,
+                "power": 7.65,
+                "use": 0.89,
+            },
+            "saturday":{
+                "temp": 45,
+                "speed": 6734,
+                "power": 3.21,
+                "use": 0.46,
+            },
+            "sunday":{
+                "temp": 48,
+                "speed": 5801,
+                "power": 2.22,
+                "use": 0.21,
+            }
+        };
+
+        // Fan speed graph object
+        var fanGraphData = [];
+        for (var i=0; i<7; i++){
+            var metric = payload[dayList[i]].speed;
+            fanGraphData.push(metric);
+        }
+        new RGraph.SVG.Line({
+            id: 'fan-graph',
+            data: fanGraphData,
+            options: {
+                linewidth: 5,
+                hmargin: 0,
+                title: 'Average Daily Fan Speed (RPM)',
+                gutterLeft: 50,
+                gutterBottom: 50,
+                yaxisDecimals: 0,
+                
+                tickmarksStyle: 'endrect',
+                tickmarksFill: 'white',
+                tickmarksLinewidth: 3,
+                tickmarksSize: 10,
+                
+                xaxisLabels: ['Monday','Tuesday','Wednesday','Thursday','Friday','Saturday','Sunday'],
+                shadow: true
+            }
+        }).trace();
+
+        // Core temp graph object
+        var tempGraphData = [];
+        for (var i=0; i<7; i++){
+            var metric = payload[dayList[i]].temp;
+            tempGraphData.push(metric);
+        }
+        new RGraph.SVG.Line({
+            id: 'temp-graph',
+            data: tempGraphData,
+            options: {
+                linewidth: 5,
+                hmargin: 0,
+                title: 'Average Daily Temperature (F)',
+                gutterLeft: 50,
+                gutterBottom: 50,
+                yaxisDecimals: 2,
+                
+                tickmarksStyle: 'endrect',
+                tickmarksFill: 'white',
+                tickmarksLinewidth: 3,
+                tickmarksSize: 10,
+                
+                xaxisLabels: ['Monday','Tuesday','Wednesday','Thursday','Friday','Saturday','Sunday'],
+                shadow: true
+            }
+        }).trace();
+
+        // Power draw graph object
+        var powerGraphData = [];
+        for (var i=0; i<7; i++){
+            var metric = payload[dayList[i]].power;
+            powerGraphData.push(metric);
+        }
+        new RGraph.SVG.Line({
+            id: 'power-graph',
+            data: powerGraphData,
+            options: {
+                linewidth: 5,
+                hmargin: 0,
+                title: 'Average Daily Power Draw (V)',
+                gutterLeft: 50,
+                gutterBottom: 50,
+                yaxisDecimals: 2,
+                
+                tickmarksStyle: 'endrect',
+                tickmarksFill: 'white',
+                tickmarksLinewidth: 3,
+                tickmarksSize: 10,
+                
+                xaxisLabels: ['Monday','Tuesday','Wednesday','Thursday','Friday','Saturday','Sunday'],
+                shadow: true
+            }
+        }).trace();
+
+        // Percent use graph object
+        var taskGraphData = [];
+        for (var i=0; i<7; i++){
+            var metric = payload[dayList[i]].use;
+            taskGraphData.push(metric);
+        }
+        new RGraph.SVG.Line({
+            id: 'task-graph',
+            data: taskGraphData,
+            options: {
+                linewidth: 5,
+                hmargin: 0,
+                title: 'Tasks Proccessing (%)',
+                gutterLeft: 50,
+                gutterBottom: 50,
+                yaxisDecimals: 2,
+                
+                tickmarksStyle: 'endrect',
+                tickmarksFill: 'white',
+                tickmarksLinewidth: 3,
+                tickmarksSize: 10,
+                
+                xaxisLabels: ['Monday','Tuesday','Wednesday','Thursday','Friday','Saturday','Sunday'],
+                shadow: true
+            }
+        }).trace();
+
+// Source: https://www.w3schools.com/howto/tryit.asp?filename=tryhow_css_js_dropdown_right
+        function menu(){
+           document.getElementById("myDropdown").classList.toggle("show");
+            // Close the dropdown if the user clicks outside of it
+            window.onclick = function(event) {
+                if (!event.target.matches('.dropbtn')) {
+                    var dropdowns = document.getElementsByClassName("dropdown-content");
+                    var i;
+                    for (i = 0; i < dropdowns.length; i++) {
+                        var openDropdown = dropdowns[i];
+                        if (openDropdown.classList.contains('show')) {
+                            openDropdown.classList.remove('show');
+                        }
+                    }
+                }      
+            }
+        }
+    </script>
+</body>
