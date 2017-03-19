@@ -1,0 +1,492 @@
+<html>
+    <head>
+        <title>Heat Map (Hrothgar)</title>
+        <script src="https://ajax.googleapis.com/ajax/libs/jquery/2.1.4/jquery.min.js"></script>
+
+        <script type="text/javascript" 
+                src="https://static.codehs.com/gulp/1819a98e50d8278c5368fd54959eb0fc77db61ec/chs-js-lib/chs.js"></script>
+
+        <style>
+            canvas {
+                border: 1px solid black;
+                display: inline-block;
+                vertical-align: top;
+            }
+
+            pre {
+                border: 1px solid white;
+                display: inline-block;
+                width: 1400px;
+                height: 1px;
+                background-color: #F5F5F5;
+            }
+
+            h1 {
+                text-align: center;
+            }
+
+            img {
+                position: absolute;
+                top: 890px;
+                left: 1175px;
+            }
+        </style>
+    </head>
+
+    <body>
+        <h1>Heat Map of Hrothgar(?) Cluster</h1>
+
+        <canvas
+            width="1400"
+            height="800"
+            class="codehs-editor-canvas">
+        </canvas>
+
+        <pre id="console"></pre>
+
+        <button onclick="sendData(1)">Help</button>
+        <button onclick="sendData(2)">Control Panel</button>
+        <button onclick="sendData(3)">Graphs</button>
+
+        <div id="yellowBox" style="border:1px solid black; width:1100; height:100px; background-color:lightgray">
+            <p> No machines selected </p>
+        </div>
+
+     <!--  <div id="hoverBox" style="border:1px solid black; width:100; height:20; background-color:white">
+            <p> Hey </p>
+        </div>-->
+
+        <img src="http://www.ttusbdc.org/lubbock/wp-content/uploads/2015/07/ttu.jpg" 
+            alt="HTML5 Icon" style="width:200px; height:150px;">
+
+        <script>
+            var numShelves = 72;
+            var numRacks = 12;
+            var numRows = 1;
+            var numMachines = numShelves * numRacks;
+            var id;
+
+            var payload = [
+                    {
+                        "name": "compute-1-3",
+                        "temp": "24 F",
+                        "speed": "19 rpm",
+                        "usage": "29%",
+                        "power": "4.11 V"
+                    },
+                    {
+                        "name": "compute-2-1",
+                        "temp": "72 F",
+                        "speed": "5919 rpm",
+                        "usage": "29%",
+                        "power": "4.11 V"
+                    },
+                    {
+                        "name": "compute-2-2",
+                        "temp": "8 F",
+                        "speed": "50 rpm",
+                        "usage": "56%",
+                        "power": "5.07 V"
+                    },
+                    {
+                        "name": "compute-3-12",
+                        "temp": "50 F",
+                        "speed": "120 rpm",
+                        "usage": "29%",
+                        "power": "4.11 V"
+                    },
+                    {
+                        "name": "compute-3-71",
+                        "temp": "8 F",
+                        "speed": "150 rpm",
+                        "usage": "56%",
+                        "power": "5.07 V"
+                    },
+                    ];
+                // So this only gets called if there is an alert after it. 
+                // I guess it has something to do with the order in which the page
+                // evaluates the script? Find alternatives to alert, so you
+                // don't have to deal with alert every time you reload the page.
+                $.getJSON("http://localhost:8888/test_two.json", function(data){
+                    console.log(data);
+                    for (var key in data){
+                        var snippet = {
+                            "name": data[key].name,
+                            "temp": data[key].temp,
+                            "speed": data[key].speed,
+                            "usage": data[key].usage,
+                            "power": data[key].power
+                        };
+                        payload.push(snippet);
+                    }
+                });
+          //      document.addEventListener()
+           alert("outer");
+
+            window.onload = function() {
+                
+                var machineHeight = getHeight()/(numShelves+2);
+                var rackHeight = numShelves * machineHeight;
+                var rackWidth = getWidth()/(numRacks+2);
+
+                var NUM_ROWS = numShelves;
+                var NUM_COLS = numRacks;
+
+                var ROW_HEIGHT = (getHeight()-10);
+                var COL_WIDTH = getWidth()/NUM_COLS;
+
+                // Adjust these values for whatever a suitable core temperature is
+                var coreTempGreenZone = 10;
+                var coreTempYellowZone = 20;
+                var coreTempOrangeZone = 30;
+                var coreTempRedZone = 40;
+
+                // Adjust these values for whatever a suitable fan speed is
+                var fanSpeedGreenZone = 50;
+                var fanSpeedYellowZone = 100;
+                var fanSpeedOrangeZone = 150;
+                var fanSpeedRedZone = 200;
+
+                // These values should represent percent used or # tasks processing
+                var usageGreenZone = 25;
+                var usageYellowZone = 50;
+                var usageOrangeZone = 75;
+                var usageRedZone = 90;
+                
+                // Power draw thresholds
+                var powerGreenZone = 2;
+                var powerYellowZone = 6;
+                var powerOrangeZone = 8;
+                var powerRedZone = 12;
+
+                // Toggle frame line definitions
+                var top = new Line(0, 0, 0, 0);
+                var bot = new Line(0, 0, 0, 0);
+                var left = new Line(0, 0, 0, 0);
+                var right = new Line(0, 0, 0, 0);
+
+                var outputConsole = document.getElementById("yellowBox");
+                var selected = document.getElementById("textBox");
+
+                    // Data duplication (for testing visualization only)
+                /*   for (var j=4; j<=12; j++){
+                        for (var i=1; i<72; i++){
+                            var name = "compute-"+j+"-"+i;
+                            var temp = Randomizer.nextInt(1,10);
+                            var speed = Randomizer.nextInt(2,50);
+                            var usage = Randomizer.nextInt(0,100);
+                            var power = Randomizer.nextInt(1,2);
+                            
+                            var chunk = {
+                                name: name,
+                                temp: temp+" F",
+                                speed: speed+" rpm",
+                                usage: usage+"%",
+                                power: power+" V"
+                            };
+                            payload.push(chunk);
+                        }
+                    }*/
+
+                // Draw Row
+                for (var i=0; i<numRacks; i++){
+                    // +10 for spacing
+                    draw_rack((10+rackWidth)* i,10); 
+                }
+
+                // Parse JSON payload
+                for (var i=0; i<payload.length; i++){
+                   // alert(i);
+                    var json = payload[i];
+                    var name = json.name;
+                    var temp = parseInt(json.temp);
+                    var speed = parseInt(json.speed);
+                    var usage = parseInt(json.usage);  
+                    var power = parseInt(json.power);
+
+                    // Isolate rack number from original name string
+                    var rack = '';
+                    var j = 8;
+                    while (name[j] != "-"){
+                        rack += name[j];
+                        j += 1;
+                    }
+
+                    // Isolate shelf number from original name string
+                    var shelf = name.slice(j+1);
+
+                    // Coordinates to draw machine at
+                    var x = (rack - 1) * (rackWidth + 10) + 6; 
+                    var y = (getHeight() - 15) - (shelf * (machineHeight) - 2);
+
+                    // Draw row is the first thing called, shouldn't ever have to update
+                    // Draw machine and parse in the json will be on a loop (periodically 
+                    // request a json payload and redraw machines (but leave racks alone))
+                    drawMachine(name,temp,speed,20,power,x,y);  
+
+                    // This is working backwards from draw machine. Given a location 
+                    // (where you clicked) this function fetches relevant info associated 
+                    // with that location
+                    mouseClickMethod(whatRack);
+                }
+
+                    function drawMachine(name,temp,speed,usage,power,x,y){
+
+                        var innerRect = new Rectangle(rackWidth-5, machineHeight-4);
+                        var outerRect = new Rectangle(rackWidth-2,machineHeight-2);
+                        var core = new Rectangle(12,machineHeight-4);
+                        var fan = new Rectangle(12,machineHeight-4);
+                        var tasks = new Rectangle(12,machineHeight-4);
+                        var draw = new Rectangle(12,machineHeight-4);
+                        
+                        outerRect.setPosition(x, y);
+                        innerRect.setPosition(x+1, y+1);
+                        core.setPosition(x+4,y+1);
+                        fan.setPosition(x+18,y+1);
+                        tasks.setPosition(x+32,y+1);
+                        draw.setPosition(x+47,y+1);
+                        
+                        outerRect.setColor(Color.black);
+                        innerRect.setColor(Color.gray);
+                        
+                        // Temperature (C)
+                        var coreColor = coreTempColorSpectrum(temp);
+                        core.setColor(coreColor);
+                        
+                        // Fan Speed (rpm)
+                        var fanColor = fanSpeedColorSpectrum(speed);
+                        fan.setColor(fanColor);
+
+                        // Power Draw (V)
+                        var powerColor = powerColorSpectrum(power);
+                        draw.setColor(powerColor);
+                        
+                        // % CPU usage
+                        var use = usageColorSpectrum(usage); 
+                        tasks.setColor(use);                  
+
+                        add(outerRect);
+                        add(innerRect);
+                        add(core);
+                        add(fan);
+                        add(draw);
+                        add(tasks);
+                    }
+
+                    // These color spectrum functions determine machine color based off thresholds 
+                    // for metrics like heat, speed, etc.
+                    function fanSpeedColorSpectrum(speed){
+                        if (speed <= 0){
+                            return "white";
+                        }
+                        else if (speed > 0 && speed <= fanSpeedGreenZone){
+                            return "green";
+                        }
+                        else if (speed > fanSpeedGreenZone && speed <= fanSpeedYellowZone){
+                            return "yellow";
+                        }
+                        else if (speed > fanSpeedYellowZone && speed <= fanSpeedOrangeZone){
+                            return "orange";
+                        }
+                        else if (speed > fanSpeedOrangeZone && speed <= fanSpeedRedZone){
+                            return "red"
+                        }
+                        else if (speed > fanSpeedRedZone){
+                            return "black";
+                        }
+                    }
+
+                    function coreTempColorSpectrum(temp){
+                        if (temp <= 0){
+                            return "white";
+                        }
+                        else if (temp <= coreTempGreenZone){
+                            return "green";
+                        }
+                        else if (temp > coreTempGreenZone && temp <= coreTempYellowZone){
+                            return "yellow";
+                        }
+                        else if (temp > coreTempYellowZone && temp <= coreTempOrangeZone){
+                            return "orange";
+                        }
+                        else if (temp > coreTempOrangeZone && temp <= coreTempRedZone){
+                            return "red"
+                        }
+                        else if (temp > coreTempRedZone){
+                            return "black";
+                        }
+                    }
+
+                    function powerColorSpectrum(power){
+                        if (power <= 0){
+                            return "white";
+                        }
+                        else if (power <= powerGreenZone){
+                            return "green";
+                        }
+                        else if (power > powerGreenZone && power <= powerYellowZone){
+                            return "yellow";
+                        }
+                        else if (power > powerYellowZone && power <= powerOrangeZone){
+                            return "orange";
+                        }
+                        else if (power > powerOrangeZone && power <= powerRedZone){
+                            return "red"
+                        }
+                        else if (power > powerRedZone){
+                            return "black";
+                        }
+                    }
+
+                    function usageColorSpectrum(use){
+                        if (use <= 0){
+                            return "white";
+                        }
+                        else if (use <= usageGreenZone){
+                            return "green";
+                        }
+                        else if (use > usageGreenZone && use <= usageYellowZone){
+                            return "yellow";
+                        }
+                        else if (use > usageYellowZone && use <= usageOrangeZone){
+                            return "orange";
+                        }
+                        else if (use > usageOrangeZone && use <= usageRedZone){
+                            return "red"
+                        }
+                        else if (use > usageRedZone){
+                            return "black";
+                        }
+                    }
+
+                    function draw_rack(x,y){
+                        var border = new Rectangle(rackWidth,rackHeight);
+                        border.setPosition(x+5,y);
+                        border.setColor(Color.black);
+                        add(border);
+
+                        var inner = new Rectangle(rackWidth-4,rackHeight-4);
+                        inner.setPosition(x+7,y+2);
+                        inner.setColor('#9bb29d');
+                        add(inner);
+                    }
+
+                    // plan D: iA - A <= x <= iA where i is col #, x is xCor, A is column width. find i given x.
+                    // Apparently without the heading (<h1>), the top 2 or 3 shelves won't register with e.getX()/e.getY() 
+                    function whatRack(e){
+                        var xCor = e.getX();
+                        var yCor = e.getY();
+                        var elem = getElementAt(xCor,yCor);
+                        if (elem != null){
+                            var i = 0;
+                            while(true){
+                                i++;
+                                if((i*COL_WIDTH - COL_WIDTH) <= xCor && xCor <= i*COL_WIDTH){
+                                    whatMachine(yCor,i);
+                                    break;
+                                }
+                            }
+                        }
+                    }
+
+                    // This function determines what machine # is clicked on, passes that value
+                    // to displayReadings.
+                    function whatMachine(yCor,i){
+                        var rackNum = i;
+                        var j = 0;          
+                        while(true){
+                            j++;
+                            if((j*machineHeight - machineHeight) <= yCor && yCor <= j*machineHeight){ 
+                                var shelfNum = Math.abs(72 - (j-1));
+                                shelfNum += 1;
+                                displayReadings(rackNum,shelfNum);
+                                toggleFrame(rackNum, shelfNum);
+                                break;
+                            }
+                        }
+                    }
+
+                    // This function should display the numeric values (core temp, fan speed, etc)
+                    // of the object the mouse clicked on.
+                    function displayReadings(rackNum,shelfNum){
+
+                        $(document).ready(function(){
+                            $("div").empty();
+                        });
+
+                        id = ("compute-"+rackNum+"-"+shelfNum);
+
+                        // Eventually clicking on the Graphs button will pass selected_node to Graphs
+                        // That way Graphs can build the graphs by searching the database for all info
+                        // related to selected_node
+
+                        // Surely there is a faster way to find the right json object
+                        // instead of searching the whole list (payload)  change this to a whille loop? sholdnt matter bc break
+                        for (var i=0; i<payload.length; i++){
+                            var json = payload[i];
+                            var nameTwo = json.name;
+                            if (nameTwo == id){
+
+                        // I guess I could just cocatenate these all into one text node
+                            var id_text = document.createTextNode("Name: "+id+"\n");
+                            var ct = document.createTextNode("The core temperature is "+json.temp+"\n");
+                            var fd = document.createTextNode("The fan speed is "+json.speed+"\n");
+                            var us = document.createTextNode("The usage is "+json.usage+"\n");
+                            var pw = document.createTextNode("The power is "+json.power+"\r\n");
+
+                            outputConsole.appendChild(id_text);
+                            outputConsole.appendChild(ct);
+                            outputConsole.appendChild(fd);
+                            outputConsole.appendChild(us);
+                            outputConsole.appendChild(pw);
+                            break;
+                            }
+                        }
+                    }
+
+                    function toggleFrame(rackNum, shelfNum){
+
+                        var x1 = (rackNum - 1) * (rackWidth + 10) + 6;
+                        var y1 = (getHeight() - 15) - (shelfNum * (machineHeight));
+                        var x2 = x1 + rackWidth - 2;
+                        var y2 = y1 + machineHeight;
+                        
+                        top.setPosition(x1, y1);
+                        top.setEndpoint(x2, y1);
+                        bot.setPosition(x1, y2);
+                        bot.setEndpoint(x2, y2);
+                        left.setPosition(x1, y1);
+                        left.setEndpoint(x1, y2);
+                        right.setPosition(x2, y1);
+                        right.setEndpoint(x2, y2);
+
+                        top.setColor(Color.blue);
+                        bot.setColor(Color.blue);
+                        right.setColor(Color.blue);
+                        left.setColor(Color.blue);
+
+                        top.setLineWidth(4);
+                        bot.setLineWidth(4);
+                        left.setLineWidth(4);
+                        right.setLineWidth(4);
+
+                        add(top);
+                        add(bot);
+                        add(left);
+                        add(right);
+                    }
+            }
+
+            //Wow it worked!
+            function sendData(num){
+                if (num == 3){
+                    window.open('http://localhost:8888/Graphs.html?id='+id);
+                } else if (num == 2){
+                    window.open('http://localhost:8888/heatMapControlPanel.html?id='+id);
+                } else {
+                    window.open('http://localhost:8888/heatMapHelp.html?id='+id);
+                }
+            }
+        </script>
+    </body>
+</html>
