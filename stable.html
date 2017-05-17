@@ -1,6 +1,6 @@
 <html>
     <head>
-        <title>Heat Map (Hrothgar)</title>
+        <title>Heat Map </title>
         <script src="https://ajax.googleapis.com/ajax/libs/jquery/2.1.4/jquery.min.js"></script>
 
         <script type="text/javascript" 
@@ -20,6 +20,13 @@
                 height: 1px;
                 background-color: #F5F5F5;
             }
+            
+            svg {
+                position: absolute;
+                left: 1400px;
+                top: 1220px;
+                background-color: "black";
+            }
 
             h1 {
                 text-align: center;
@@ -34,9 +41,10 @@
     </head>
 
     <body>
-        <h1>Heat Map of Hrothgar(?) Cluster</h1>
+        <h1>Heat Map of HPCC</h1>
 
         <canvas
+            id="canvas"
             width="1400"
             height="800"
             class="codehs-editor-canvas">
@@ -47,8 +55,11 @@
         <button onclick="sendData(1)">Help</button>
         <button onclick="sendData(2)">Control Panel</button>
         <button onclick="sendData(3)">Graphs</button>
+        <button onclick="redfishRequest()">Redfish</button>
+        <button onclick="completeMetrics()">Metrics</button>
+       
 
-        <div id="yellowBox" style="border:1px solid black; width:1100; height:100px; background-color:lightgray">
+        <div id="outputConsole" style="border:1px solid black; width:310; height:100px; background-color:lightgray">
             <p> No machines selected </p>
         </div>
 
@@ -59,9 +70,15 @@
         <img src="http://www.ttusbdc.org/lubbock/wp-content/uploads/2015/07/ttu.jpg" 
             alt="HTML5 Icon" style="width:200px; height:150px;">
 
+        
+        <svg 
+            id="row" viewBox="0 0 10 10" xmlns="http://www.w3.org/2000/svg">
+            <rect id="hover" x="10" y="10" width="80" height="750" />
+        </svg>
+
         <script>
             var numShelves = 72;
-            var numRacks = 12;
+            var numRacks = prompt("Enter number of racks to display", "12");
             var numRows = 1;
             var numMachines = numShelves * numRacks;
             var id;
@@ -102,8 +119,16 @@
                         "usage": "56%",
                         "power": "5.07 V"
                     },
+                    {
+                        "name": "compute-3-72",
+                        "temp": "8 F",
+                        "speed": "150 rpm",
+                        "usage": "56%",
+                        "power": "5.07 V"
+                    },                    
                     ];
-                // So this only gets called if there is an alert after it. 
+
+                // So this only gets called if there is an alert after it. Sometimes.
                 // I guess it has something to do with the order in which the page
                 // evaluates the script? Find alternatives to alert, so you
                 // don't have to deal with alert every time you reload the page.
@@ -119,20 +144,94 @@
                         };
                         payload.push(snippet);
                     }
-                });
-          //      document.addEventListener()
-           alert("outer");
+                });           
+            
+                /*$.getJSON("http://localhost:8888/completeMetrics.json", function(data){
+                    console.log(data);
+                    alert("hello");
+                    for (var key in data){
+                        var snippet = {
+                            "name": data[key].name,
+                            "id": data[key].id,
+                            "state": data[key].state,
+                            "health": data[key].health,
+                            "readingCelsius": data[key].temp.readingCelsius,
+                            "criticalUpperTemp": data[key].temp.criticalUpper,
+                            "fatalUpper": data[key].temp.fatalUpper,
+                            "speed": data[key].speed,
+                            "usage": data[key].usage,
+                            "consumedWatts": data[key].power.consumedWatts,
+                            "requestedWatts": data[key].power.requestedWatts,
+                            "availableWatts": data[key].power.availableWatts,
+                            "voltage": data[key].power.volts.voltage,
+                            "criticalUpperVolt": data[key].power.volts.criticalUpper,
+                            "fatalUpperVolt": data[key].power.volts.fatalUpper,
+                            "criticalLowerVolt": data[key].power.volts.criticalLower,
+                            "fatalLowerVolt": data[key].power.volts.fatalLower,
+                        };
+                        payload.push(snippet);
+                        alert("Working");
+                    }
+                });*/
+                //alert("outer"); // Uncomment alert to make getJSON work. Ask Dr. Turner about this.
 
             window.onload = function() {
+
+                var timer;
+                $(document.getElementById('row')).mouseenter(function() {
+                    var that = this;
+                    timer = setTimeout(function(){
+                        $('row').removeClass('hovered');
+                        $(that).addClass('hovered');
+                        drawHoverBox(10,10);
+                    }, 10);
+                }).mouseleave(function() {
+                    clearHoverBox();
+                    clearTimeout(timer);
+                });
+
+            // Hover box functions are not working yet. But this is just a graphics nicety.
+            // Get the Redfish queries working first. 
+            function drawHoverBox(x,y){
+                var NS = "http://www.w3.org/2000/svg";
+                var box = document.createElementNS(NS, "rect");
+                console.log(box);
+                box.setAttribute("x", x);
+                box.setAttribute("y", y);
+                box.setAttribute("width", 90);
+                box.setAttribute("height", 40);
+                box.style.strokeWidth="1";   
+                box.style.stroke="#111111";
+                box.style.fillOpacity="1.0";
+                box.style.fill="white";
+                row.appendChild(box);
+
+                var text = document.createTextNode("Compute id relevant metrics");
+                row.appendChild(text);
+            }
+
+            function clearHoverBox(){
+                var box = document.getElementById("row");
+                while (box.firstChild){
+                    box.removeChild(box.firstChild);
+                }
+            }
                 
                 var machineHeight = getHeight()/(numShelves+2);
-                var rackHeight = numShelves * machineHeight;
-                var rackWidth = getWidth()/(numRacks+2);
+                var rackHeight = numShelves * machineHeight + 4;
+                var rackWidth = 100;
+
+                // This sizing method works much better. Rack width is constant, 
+                // canvas is adjusted depending on how many racks are displayed.
+                var canvasWidth = 110 * numRacks;
+                var originalHeight = getHeight();
+                document.getElementById("canvas").setAttribute("width",canvasWidth);
+                //document.getElementById("canvas").setAttribute("height",originalHeight+10);
 
                 var NUM_ROWS = numShelves;
                 var NUM_COLS = numRacks;
 
-                var ROW_HEIGHT = (getHeight()-10);
+                var ROW_HEIGHT = (originalHeight-10);
                 var COL_WIDTH = getWidth()/NUM_COLS;
 
                 // Adjust these values for whatever a suitable core temperature is
@@ -165,7 +264,7 @@
                 var left = new Line(0, 0, 0, 0);
                 var right = new Line(0, 0, 0, 0);
 
-                var outputConsole = document.getElementById("yellowBox");
+                var outputConsole = document.getElementById("outputConsole");
                 var selected = document.getElementById("textBox");
 
                     // Data duplication (for testing visualization only)
@@ -191,43 +290,49 @@
                 // Draw Row
                 for (var i=0; i<numRacks; i++){
                     // +10 for spacing
-                    draw_rack((10+rackWidth)* i,10); 
+                    addRackNumber((10+rackWidth)* i,10,i);
+                    draw_rack((10+rackWidth)* i,10);    // Reset to 10 if new spacing doesn't work out
+
                 }
 
-                // Parse JSON payload
-                for (var i=0; i<payload.length; i++){
-                   // alert(i);
-                    var json = payload[i];
-                    var name = json.name;
-                    var temp = parseInt(json.temp);
-                    var speed = parseInt(json.speed);
-                    var usage = parseInt(json.usage);  
-                    var power = parseInt(json.power);
+                setTimer(masterUpdate, 5000);
 
-                    // Isolate rack number from original name string
-                    var rack = '';
-                    var j = 8;
-                    while (name[j] != "-"){
-                        rack += name[j];
-                        j += 1;
+                function masterUpdate(){
+                    // Parse JSON payload
+                    for (var i=0; i<payload.length; i++){
+                        //alert(payload.length);
+                        var json = payload[i];
+                        var name = json.name;
+                        var temp = parseInt(json.temp);
+                        var speed = parseInt(json.speed);
+                        var usage = parseInt(json.usage);  
+                        var power = parseInt(json.power);
+
+                        // Isolate rack number from original name string
+                        var rack = '';
+                        var j = 8;
+                        while (name[j] != "-"){
+                            rack += name[j];
+                            j += 1;
+                        }
+
+                        // Isolate shelf number from original name string
+                        var shelf = name.slice(j+1);
+
+                        // Coordinates to draw machine at
+                        var x = (rack - 1) * (rackWidth + 10) + 6; 
+                        var y = (getHeight() - 15) - (shelf * (machineHeight) - 2); // Reset to 15 if new spacing doesn't work out
+
+                        // Draw row is the first thing called, shouldn't ever have to update
+                        // Draw machine and parse in the json will be on a loop (periodically 
+                        // request a json payload and redraw machines (but leave racks alone))
+                        drawMachine(name,temp,speed,20,power,x,y);  
+
+                        // This is working backwards from draw machine. Given a location 
+                        // (where you clicked) this function fetches relevant info associated 
+                        // with that location
+                        mouseClickMethod(whatRack);
                     }
-
-                    // Isolate shelf number from original name string
-                    var shelf = name.slice(j+1);
-
-                    // Coordinates to draw machine at
-                    var x = (rack - 1) * (rackWidth + 10) + 6; 
-                    var y = (getHeight() - 15) - (shelf * (machineHeight) - 2);
-
-                    // Draw row is the first thing called, shouldn't ever have to update
-                    // Draw machine and parse in the json will be on a loop (periodically 
-                    // request a json payload and redraw machines (but leave racks alone))
-                    drawMachine(name,temp,speed,20,power,x,y);  
-
-                    // This is working backwards from draw machine. Given a location 
-                    // (where you clicked) this function fetches relevant info associated 
-                    // with that location
-                    mouseClickMethod(whatRack);
                 }
 
                     function drawMachine(name,temp,speed,usage,power,x,y){
@@ -361,14 +466,22 @@
 
                     function draw_rack(x,y){
                         var border = new Rectangle(rackWidth,rackHeight);
-                        border.setPosition(x+5,y);
+                        border.setPosition(x+5,y-4);
                         border.setColor(Color.black);
                         add(border);
 
                         var inner = new Rectangle(rackWidth-4,rackHeight-4);
-                        inner.setPosition(x+7,y+2);
+                        inner.setPosition(x+7,y-2);
                         inner.setColor('#9bb29d');
                         add(inner);
+                    }
+
+                    function addRackNumber(x,y,i){
+                        var j = i + 1;
+                        var number = new Text("Rack# " + j, "11pt Arial");
+                        number.setPosition(x+25, y+rackHeight+8);
+                        number.set
+                        add(number);
                     }
 
                     // plan D: iA - A <= x <= iA where i is col #, x is xCor, A is column width. find i given x.
@@ -397,7 +510,7 @@
                         while(true){
                             j++;
                             if((j*machineHeight - machineHeight) <= yCor && yCor <= j*machineHeight){ 
-                                var shelfNum = Math.abs(72 - (j-1));
+                                var shelfNum = Math.abs(72 - (j-1)); // Reset to 72 if new spacing doesn't work out
                                 shelfNum += 1;
                                 displayReadings(rackNum,shelfNum);
                                 toggleFrame(rackNum, shelfNum);
@@ -435,9 +548,17 @@
                             var pw = document.createTextNode("The power is "+json.power+"\r\n");
 
                             outputConsole.appendChild(id_text);
+                            var br = document.createElement("br");
+                            outputConsole.append(br);
                             outputConsole.appendChild(ct);
+                            var br = document.createElement("br");
+                            outputConsole.append(br);
                             outputConsole.appendChild(fd);
+                            var br = document.createElement("br");
+                            outputConsole.append(br);
                             outputConsole.appendChild(us);
+                            var br = document.createElement("br");
+                            outputConsole.append(br);
                             outputConsole.appendChild(pw);
                             break;
                             }
@@ -475,6 +596,10 @@
                         add(left);
                         add(right);
                     }
+
+            var somethingDifferent = document.getElementById("hover");
+            somethingDifferent.style.fill = "#24b70b";
+            //alert("hey");
             }
 
             //Wow it worked!
@@ -486,6 +611,82 @@
                 } else {
                     window.open('http://localhost:8888/heatMapHelp.html?id='+id);
                 }
+            }
+
+            
+            function redfishRequest(){
+                var main_link = "http://localhost:8080/redfish/v1/";
+                var thermal_link = "http://localhost:8080/redfish/v1/Chassis/Thermal/1U/Thermal#/Temperatures/";
+                var power_link = "http://localhost:8080/redfish/v1/Chassis/Thermal/1U/Power/";
+                var temp_list = [];
+                var power_list = [];
+               // Should open connection to Froda via RedfishQueryScript.sh
+               // Still needs work 
+            /*    var exec = require('child_process').exec, child;
+                child = exec('cat *.js bad_file | wc -l',
+                    function (error, stdout, stderr) {
+                        console.log('stdout: ' + stdout);
+                        console.log('stderr: ' + stderr);
+                        if (error !== null) {
+                            console.log('exec error: ' + error);
+                        }
+                    });
+                child();*/
+
+                // So far so good for this chunk
+                // Will I need a seperate GET request for every metric?
+                // Or can I pull the full payload and parse it locally?
+                $.get(main_link, function(data){
+                    //alert("ok");
+                    for (var key in data){
+                        alert(key);
+                    }
+                });
+
+                $.get(thermal_link, function(data){
+                    for (var i = 0; i < key.length; i++){
+                        temp_list.append(key[i].ReadingCelcisus);
+                    }
+                });
+
+                $.get(power_link, function(data){
+                    for (var i = 0; i < key.length; i++){
+                        power_list.append(key[i].PowerConsumedWatts);
+                    }
+                });
+            }
+
+            function completeMetrics(){
+                //alert("one");
+                $.getJSON("http://localhost:8888/completeMetrics.json", function(data){
+                    //alert(payload.length);
+                    console.log(data);             
+                        var snippet = {
+                            "name": data.name,
+                            "id": data.id,
+                            "state": data.state,
+                            "health": data.health,
+                            "readingCelsius": data.temp.readingCelsius,
+                            "criticalUpperTemp": data.temp.criticalUpper,
+                            "fatalUpper": data.temp.fatalUpper,
+                            "speed": data.speed,
+                            "usage": data.usage,
+                            "consumedWatts": data.power.consumedWatts,
+                            "requestedWatts": data.power.requestedWatts,
+                            "availableWatts": data.power.availableWatts,
+                            "voltage": data.power.volts.voltage,
+                            "criticalUpperVolt": data.power.volts.criticalUpper,
+                            "fatalUpperVolt": data.power.volts.fatalUpper,
+                            "criticalLowerVolt": data.power.volts.criticalLower,
+                            "fatalLowerVolt": data.power.volts.fatalLower,
+                        };
+                    payload.push(snippet);
+                    //alert(payload.length); 
+                });
+                       
+                /*for (var i = 0; i <  payload.length; i++){
+                    alert(payload[i].name);
+                }    */    
             }
         </script>
     </body>
