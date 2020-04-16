@@ -1,0 +1,486 @@
+<head>
+    <title>QStat</title>
+    <script src="jquery-3.2.1.min.js"></script>
+    <script src="/Digital_Signage/RGraph/libraries/RGraph.svg.common.core.js"></script>
+    <script src="/Digital_Signage/RGraph/libraries/RGraph.common.dynamic.js" ></script>
+    <script src="/Digital_Signage/RGraph/libraries/RGraph.common.tooltips.js" ></script>
+    <script src="/Digital_Signage/RGraph/libraries/RGraph.svg.hbar.js"></script>
+    <script src="/Digital_Signage/RGraph/libraries/RGraph.svg.pie.js"></script>
+
+    <style>
+        
+        body {
+            background-color: black;
+        }
+
+        div#top-charts {
+            position: absolute;
+            background-color: black;
+            top: 40px;
+            left: 96;
+            height: 500px;
+            width: 1728px;
+        }
+
+        div#top-charts div {
+            position: absolute;
+            top: 0;
+            width: 570px;
+            height: 500px;
+        }
+
+        div#bottom-charts {
+            position: absolute;
+            background-color: black;
+            top: 540px;
+            left: 385px;
+            height: 500px;
+            width: 1150px;
+        }
+
+        div#bottom-charts div {
+            position: absolute;
+            top: 0;
+            width: 570px;
+            height: 500px;
+        }
+
+        #blot1 {
+            position: absolute;
+            left: 590px;
+            top: 520px;
+            width: 90px;
+            height: 20px;
+            background-color: black;
+            z-index: 1;
+        }
+
+        #blot2 {
+            position: absolute;
+            left: 1160px;
+            top: 520px;
+            width: 80px;
+            height: 20px;
+            background-color: black;
+            z-index: 1;
+        }
+
+        #blot3 {
+            position: absolute;
+            left: 1740px;
+            top: 520px;
+            width: 80px;
+            height: 20px;
+            background-color: black;
+            z-index: 1;
+        }
+
+        #blot4 {
+            position: absolute;
+            left: 885px;
+            top: 1020px;
+            width: 80px;
+            height: 20px;
+            background-color: black;
+            z-index: 1;
+        }
+
+        #blot5 {
+            position: absolute;
+            left: 1465px;
+            top: 1020px;
+            width: 80px;
+            height: 20px;
+            background-color: black;
+            z-index: 1;
+        }
+
+    </style>
+
+    <div id="blot1"></div>
+    <div id="blot2"></div>
+    <div id="blot3"></div>
+    <div id="blot4"></div>
+    <div id="blot5"></div>
+
+    <div id="top-charts">
+        <div id="chart-container1"></div>
+        <div id="chart-container2"></div>
+        <div id="chart-container3"></div>    
+    </div>
+
+    <div id="bottom-charts">
+        <div id="chart-container4"></div>
+        <div id='chart-container5'></div>
+    </div>
+
+</head>
+
+<body>
+    <script> 
+        //  This script expects data of the following type:
+        //  An array of json. Check qstat_local for full array
+        window.onload = function()
+        {
+            // Fetches data from qstat_local, 
+            // pushes relevant parts to master_list
+            var master_list = [];
+            $.getJSON("http://localhost:8888/Digital_Signage/qstat_local.json", function(data){
+                for (var key in data){
+                    var condensed_object = {
+                        "cluster_name":data[key].cluster_name,
+                        "name":data[key].name,
+                        "usedSlots": data[key].usedSlots,
+                        "totalSlots": data[key].totalSlots
+                    };
+                    master_list.push(condensed_object);
+                }
+                // Main
+                draw_charts(master_list);
+                // PhantomJS trigger
+                document.title = "Loaded";
+            });
+
+            // Charts source: Rgraph.net
+            // parses master_list, then uses that data
+            // to draw the pie graphs and hbar graph
+            function draw_charts(master_list)
+            {
+                var data = parseData(master_list);
+                omniPie(data.omni);
+                ivyPie(data.ivy);
+                normalPie(data.normal);
+                serialPie(data.serial);
+                communityPie(data.total_percent);
+            }
+
+            function parseData(master_list)
+            {
+                var omni;
+                var ivy;
+                var normal;
+                var serial;
+                var total_combined_slots = 0;
+                var used_combined_slots = 0;
+
+                var ivy_slots_added = false;
+                var omni_slots_added = false;
+                var normal_slots_added = false;
+
+                // Find percentage of used slots for every queue
+                // Sum used slots and total slots to find total percentage of used slots
+                for (var i = 0; i < master_list.length; i++){
+                    if (master_list[i].cluster_name == "Hrothgar"){
+                        if (master_list[i].name == "ivy"){
+                            if (ivy_slots_added == false){
+                                total_combined_slots += master_list[i].totalSlots; // Is this accurate?
+                                used_combined_slots += master_list[i].usedSlots;
+                                ivy_slots_added = true; // Is it even neccessary? Will ivy, normal, etc. come up more than once?
+                            }
+                            ivy = (master_list[i].usedSlots / master_list[i].totalSlots) * 100;
+                            ivy = Math.round(ivy * 10)/10;
+                        } else if (master_list[i].name == "normal"){
+                            total_combined_slots += master_list[i].totalSlots;
+                            used_combined_slots += master_list[i].usedSlots;
+                            normal = (master_list[i].usedSlots / master_list[i].totalSlots) * 100;
+                            normal = Math.round(normal * 10)/10;
+                        } else if (master_list[i].name == "serial"){
+                            total_combined_slots += master_list[i].totalSlots
+                            used_combined_slots += master_list[i].usedSlots;
+                            serial = (master_list[i].usedSlots / master_list[i].totalSlots) * 100;
+                            serial = Math.round(serial * 10)/10;                                    
+                        }
+                    } else if (master_list[i].cluster_name == "Quanah"){
+                        if (master_list[i].name == "omni"){
+                            total_combined_slots += master_list[i].totalSlots;
+                            used_combined_slots += master_list[i].usedSlots;
+                            omni = (master_list[i].usedSlots / master_list[i].totalSlots) * 100;
+                            omni = Math.round(omni * 10) / 10;
+                        } 
+                    }
+                };
+        
+                var total_percent = (used_combined_slots / total_combined_slots) * 100;
+                total_percent = Math.round(total_percent * 10) / 10;  
+
+                var data = {
+                    "omni": omni,
+                    "ivy": ivy,
+                    "normal": normal,
+                    "serial": serial,
+                    "total_percent": total_percent
+                };
+                
+                return data;
+            }
+
+            function omniPie(omni)
+            {
+                // Omni pie
+                pie1 = new RGraph.SVG.Pie({
+                    id: 'chart-container1',
+                    data: [omni,100-omni],
+                    options: {
+                        colors: ['red', 'gray']
+                    }
+                }).draw().exec(function (obj)
+                
+                {
+                    RGraph.SVG.create({
+                        svg: obj.svg,
+                        type: 'circle',
+                        parent: obj.svg.all,
+                        attr: {
+                            cx: obj.centerx,
+                            cy: obj.centery,
+                            r: obj.radius - 45,
+                            fill: 'black'
+                        }
+                    }); 
+
+                    // Add the text label
+                    RGraph.SVG.text({
+                        object: obj,
+                        parent: obj.svg.all,
+                        text:   obj.data[0] + '%',
+                        x:      obj.centerx,
+                        y:      obj.centery - 20,
+                        halign: 'center',
+                        valign: 'center',
+                        size:   62,
+                        bold: true,
+                        color:  '#999'
+                    });
+
+                    // Add the text label of the name
+                    RGraph.SVG.text({
+                        object: obj,
+                        parent: obj.svg.all,
+                        text:   'Quanah - Omni',
+                        x:      obj.centerx,
+                        y:      obj.centery + 30,
+                        halign: 'center',
+                        valign: 'top',
+                        size:   20,
+                        bold: true,
+                        color:  '#999'
+                    });
+                });
+            }
+
+            function ivyPie(ivy)
+            {
+                // Ivy pie
+                new RGraph.SVG.Pie({
+                    id: 'chart-container2',
+                    data: [ivy,100-ivy],
+                    options: {
+                        colors: ['red', 'gray']
+                    }
+                }).draw().exec(function (obj)
+                {
+                    RGraph.SVG.create({
+                        svg: obj.svg,
+                        type: 'circle',
+                        parent: obj.svg.all,
+                        attr: {
+                            cx: obj.centerx,
+                            cy: obj.centery,
+                            r: obj.radius - 45,
+                            fill: 'black'
+                        }
+                    });
+
+                    // Add the text label
+                    RGraph.SVG.text({
+                        object: obj,
+                        parent: obj.svg.all,
+                        text:   obj.data[0] + '%',
+                        x:      obj.centerx,
+                        y:      obj.centery - 20,
+                        halign: 'center',
+                        valign: 'center',
+                        size:   62,
+                        bold: true,
+                        color:  '#999'
+                    });
+
+                    // Add the text label of the name
+                    RGraph.SVG.text({
+                        object: obj,
+                        parent: obj.svg.all,
+                        text:   'Hrothgar - Ivy',
+                        x:      obj.centerx,
+                        y:      obj.centery + 30,
+                        halign: 'center',
+                        valign: 'top',
+                        size:   20,
+                        bold: true,
+                        color:  '#999'
+                    });
+                });
+            }
+
+            function normalPie(normal)
+            {
+                // Normal pie
+                new RGraph.SVG.Pie({
+                    id: 'chart-container3',
+                    data: [normal,100-normal],
+                    options: {
+                        colors: ['red', 'gray']
+                    }
+                }).draw().exec(function (obj)
+                {
+                    RGraph.SVG.create({
+                        svg: obj.svg,
+                        type: 'circle',
+                        parent: obj.svg.all,
+                        attr: {
+                            cx: obj.centerx,
+                            cy: obj.centery,
+                            r: obj.radius - 45,
+                            fill: 'black'
+                        }
+                    });
+
+                    // Add the text label of the value
+                    RGraph.SVG.text({
+                        object: obj,
+                        parent: obj.svg.all,
+                        text:   obj.data[0] + '%',
+                        x:      obj.centerx,
+                        y:      obj.centery - 20,
+                        halign: 'center',
+                        valign: 'center',
+                        size:   62,
+                        bold: true,
+                        color:  '#999'
+                    });
+
+                    // Add the text label of the name
+                    RGraph.SVG.text({
+                        object: obj,
+                        parent: obj.svg.all,
+                        text:   'Hrothgar - Normal',
+                        x:      obj.centerx,
+                        y:      obj.centery + 30,
+                        halign: 'center',
+                        valign: 'top',
+                        size:   20,
+                        bold: true,
+                        color:  '#999'
+                    });
+                });
+            }
+            
+            function serialPie(serial)
+            {
+                // Serial pie
+                new RGraph.SVG.Pie({
+                    id: 'chart-container4',
+                    data: [serial,100-serial],                                      
+                    options: {
+                        colors: ['red', 'gray']
+                    }
+                }).draw().exec(function (obj)
+                {
+                    RGraph.SVG.create({
+                        svg: obj.svg,
+                        type: 'circle',
+                        parent: obj.svg.all,
+                        attr: {
+                            cx: obj.centerx,
+                            cy: obj.centery,
+                            r: obj.radius - 45,
+                            fill: 'black'
+                        }
+                    });
+
+                    // Add the text label of the value
+                    RGraph.SVG.text({
+                        object: obj,
+                        parent: obj.svg.all,
+                        text:   obj.data[0] + '%',
+                        x:      obj.centerx,
+                        y:      obj.centery - 20,
+                        halign: 'center',
+                        valign: 'center',
+                        size:   62,
+                        bold: true,
+                        color:  '#999'
+                    });
+
+                    // Add the text label of the name
+                    RGraph.SVG.text({
+                        object: obj,
+                        parent: obj.svg.all,
+                        text:   'Hrothgar - Serial',
+                        x:      obj.centerx,
+                        y:      obj.centery + 30,
+                        halign: 'center',
+                        valign: 'top',
+                        size:   20,
+                        bold: true,
+                        color:  '#999'
+                    });
+                });
+            }
+            
+            function communityPie(total_percent)
+            {
+                // total community pie
+                new RGraph.SVG.Pie({
+                    id: 'chart-container5',
+                    data: [total_percent,100-total_percent],                                      
+                    options: {
+                        colors: ['red', 'gray']
+                    }
+                }).draw().exec(function (obj)
+                {
+                    RGraph.SVG.create({
+                        svg: obj.svg,
+                        type: 'circle',
+                        parent: obj.svg.all,
+                        attr: {
+                            cx: obj.centerx,
+                            cy: obj.centery,
+                            r: obj.radius - 45,
+                            fill: 'black'
+                        }
+                    });
+
+                    // Add the text label of the value
+                    RGraph.SVG.text({
+                        object: obj,
+                        parent: obj.svg.all,
+                        text:   obj.data[0] + '%',
+                        x:      obj.centerx,
+                        y:      obj.centery - 20,
+                        halign: 'center',
+                        valign: 'center',
+                        size:   62,
+                        bold: true,
+                        color:  '#999'
+                    });
+
+                    // Add the text label of the name
+                    RGraph.SVG.text({
+                        object: obj,
+                        parent: obj.svg.all,
+                        text:   'Total',
+                        x:      obj.centerx,
+                        y:      obj.centery + 30,
+                        halign: 'center',
+                        valign: 'top',
+                        size:   20,
+                        bold: true,
+                        color:  '#999'
+                    });
+                });
+            }
+        }  
+
+    </script>
+    
+</body>
